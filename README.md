@@ -144,3 +144,8 @@ docker run --name sonarqube-custom -p 9000:9000 sonarqube:10.6-community
 
 ![image](https://github.com/user-attachments/assets/6f2d9ce2-774b-45e2-a62d-943a9795613d)
 
+
+## **Working of Pipeline**
+<img width="644" alt="{6F313DE6-D214-4CA7-B6A2-792FED0F60C8}" src="https://github.com/user-attachments/assets/531f336e-aa0a-46cd-ab3c-791e8bfb34b1">
+
+
