@@ -140,4 +140,7 @@ docker run --name sonarqube-custom -p 9000:9000 sonarqube:10.6-community
     }
 }
 ```
+## **Project Architecture**
+
+![image](https://github.com/user-attachments/assets/6f2d9ce2-774b-45e2-a62d-943a9795613d)
 
