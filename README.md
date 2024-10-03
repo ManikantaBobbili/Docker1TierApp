@@ -1,71 +1,143 @@
-# Getting Started with Create React App
+# Dockerized 1-Tier Application Deployment
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+This project demonstrates the end-to-end deployment of a one-tier application using Docker, CI/CD with Jenkins, and several essential security and scanning tools like SonarQube, OWASP Dependency Check, and Trivy. The infrastructure is hosted on AWS using an EC2 instance configured with the necessary software and plugins for a seamless deployment pipeline.
 
-## Available Scripts
+## **Technologies Used**
+- **Git**: Version control and source code management.
+- **Jenkins**: Continuous integration server for automated builds and deployments.
+- **Docker**: Containerization of the application.
+- **SonarQube**: Code quality and security scanning.
+- **OWASP Dependency Check**: For identifying vulnerabilities in project dependencies.
+- **Trivy**: Container and filesystem vulnerability scanning tool.
 
-In the project directory, you can run:
+## **AWS EC2 Configuration**
+- **AMI**: Amazon Linux 2 Kernel 5.10 AMI 2.0.20241001.0 x86_64 HVM
+- **Instance Type**: t3.large
+- **Security Group**: DevOps (Allowing all traffic)
+- **Storage**: 25 GiB
 
-### `npm start`
+---
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+## **Setup Instructions**
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+### 1. **EC2 Setup:**
+Launch an EC2 instance with the above configurations. Once the instance is up, connect to it and install Jenkins with the following commands:
 
-### `npm test`
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+# Install Java 11 for Jenkins dependency
+```bash
+sudo amazon-linux-extras install java-openjdk11 -y
+```
+# Add Jenkins repository and install Jenkins
+```
+sudo wget -O /etc/yum.repos.d/jenkins.repo https://pkg.jenkins.io/redhat-stable/jenkins.repo
+sudo rpm --import https://pkg.jenkins.io/redhat-stable/jenkins.io-2023.key
+sudo yum install jenkins -y
+sudo systemctl start jenkins
+```
 
-### `npm run build`
+# 2. **Install Docker:**
+```
+sudo yum install docker -y
+sudo systemctl start docker
+```
+# 3. **Install Git:**
+```
+sudo yum install git -y
+```
+# 4. **SonarQube Setup:**
+- **Run SonarQube using Docker:**
+```
+docker run --name sonarqube-custom -p 9000:9000 sonarqube:10.6-community
+```
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+# 5. **Jenkins Configuration**
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+- **Install the following Jenkins plugins:**
+  - Pipeline Stage View
+  - Docker Pipeline
+  - SonarQube Scanner
+  - Node.js
+  - OWASP Dependency Check
+  - Eclipse Temurin Installer
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+- **Configure Jenkins tools and credentials for:**
+  - SonarQube (Credentials for SonarQube scanning)
+  - Docker (DockerHub credentials)
+  - JDK 17
+  - Node.js 16
+  - OWASP Dependency Check
 
-### `npm run eject`
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+# 6. **Jenkins Pipeline Script**
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+  ```
+  pipeline {
+    agent any
+    tools {
+        jdk 'jdk17'
+        nodejs 'nodejs16'
+    }
+    environment {
+        SCANNER_HOME = tool 'mysonar'
+    }
+    stages {
+        stage("Getting Code") {
+            steps {
+                git 'https://github.com/suneelprojects/docker-project.git'
+            }
+        }
+        stage("SonarQube Checking") {
+            steps {
+                withSonarQubeEnv('mysonar') {
+                    sh '''$SCANNER_HOME/bin/sonar-scanner \
+                    -Dsonar.projectName=zomato \
+                    -Dsonar.projectKey=zomato'''
+                }
+            }
+        }
+        stage("Installing Dependencies") {
+            steps {
+                sh 'npm install'
+            }
+        }
+        stage("OWASP Dependency Check") {
+            steps {
+                dependencyCheck additionalArguments: '--scan ./ --disableYarnAudit --disableNodeAudit', odcInstallation: 'dp-check'
+                dependencyCheckPublisher pattern: '**/dependency-report.xml'
+            }
+        }
+        stage("Trivy Scanning") {
+            steps {
+                sh 'trivy fs . > trivy.txt'
+            }
+        }
+        stage("Build Docker Image") {
+            steps {
+                sh 'docker build -t app .'
+            }
+        }
+        stage("Docker Push") {
+            steps {
+                script {
+                    withDockerRegistry(credentialsId: 'Docker-id') {
+                        sh 'docker tag app manikantabobbili/dockerimage:docker'
+                        sh 'docker push manikantabobbili/dockerimage:docker'
+                    }
+                }
+            }
+        }
+        stage("Trivy Image Scan") {
+            steps {
+                sh 'trivy image manikantabobbili/dockerimage:docker'
+            }
+        }
+        stage("Deploy Application") {
+            steps {
+                sh 'docker run -itd --name application -p 3000:3000 manikantabobbili/dockerimage:docker'
+            }
+        }
+    }
+}
+```
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
-
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
-
-## Learn More
-
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
-
-To learn React, check out the [React documentation](https://reactjs.org/).
-
-### Code Splitting
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
-
-### Analyzing the Bundle Size
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
-
-### Making a Progressive Web App
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
-
-### Advanced Configuration
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
-
-### Deployment
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
-
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
-# Zomato-Clone
